@@ -1,1 +1,1 @@
-# aerospike-data-case
+# Go with Aerospike
