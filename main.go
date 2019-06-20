@@ -10,14 +10,13 @@ import (
 )
 
 type configSpecification struct {
-	ApplicationPort int `envconfig:"APP_PORT" default:"8089"`
+	ApplicationPort int    `envconfig:"APP_PORT" default:"8089"`
 	AerospikeHost   string `envconfig:"AEROSPIKE_HOST" default:"127.0.0.1"`
 	AerospikePort   int    `envconfig:"AEROSPIKE_PORT" default:"3000"`
 }
 
 type userProfile struct {
-  key int
-  profile interface{}
+	name string
 }
 
 func main() {
@@ -32,8 +31,8 @@ func main() {
 	client, err := aero.NewClient(cfg.AerospikeHost, cfg.AerospikePort)
 	if err != nil {
 		log.Fatal("Error connecting to Aerospike Database Server", err)
-  }
-  defer client.Close()
+	}
+	defer client.Close()
 
 	r := gin.Default()
 
@@ -46,18 +45,23 @@ func main() {
 
 	r.GET("/profile/:id", func(c *gin.Context) {
 		id := c.Param("id")
+
 		key, err := aero.NewKey("mobucks", "userProfiles", id)
 		if err != nil {
-		  log.Print(err)
+			log.Print(err)
 		}
-    var data userProfile
-		client.GetObject(nil, key, &data)
+
+		testObj := userProfile{name: "Stratos"}
+		client.PutObject(nil, key, &testObj)
+
+		var userProfileData userProfile
+		client.GetObject(nil, key, &userProfileData)
 
 		c.JSON(200, gin.H{
 			"status": "ok",
-			"data":   data,
+			"data":   userProfileData,
 		})
-  })
-  
+	})
+
 	r.Run(fmt.Sprintf(":%d", cfg.ApplicationPort)) // listen and serve on 0.0.0.0:8080
 }
