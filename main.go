@@ -16,24 +16,34 @@ type configSpecification struct {
 }
 
 type userProfileStruct struct {
-	key     string
+	PK      int
+	key     int
 	profile string
 }
+
+// type campaignStruct struct {
+// 	PK      int
+// 	key     int
+//   profile string
+// }
+
+var aeroDB *aero.Client
 
 func main() {
 	// CONFIGURATION
 	var cfg configSpecification
 	err := envconfig.Process("go-aerospike", &cfg)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Print(err.Error())
 	}
 
 	// AEROSPIKE
-	client, err := aero.NewClient(cfg.AerospikeHost, cfg.AerospikePort)
+	aeroDB, err := aero.NewClient(cfg.AerospikeHost, cfg.AerospikePort)
 	if err != nil {
-		log.Fatal("AEROSPIKE | CONNECTION FAILED", err)
+		log.Print("AEROSPIKE | CONNECTION FAILED: ", err)
 	}
 
+	// HTTP SERVER SETUP
 	r := gin.Default()
 
 	r.GET("/", func(c *gin.Context) {
@@ -44,53 +54,25 @@ func main() {
 	})
 
 	r.GET("/profile/:id", func(c *gin.Context) {
+		log.Print(c.Param("id"))
 		key, _ := aero.NewKey("mobucks", "userProfiles", c.Param("id"))
 
-		testObjToInsert := &userProfileStruct{
-			key:     "test",
-			profile: "JSON[{\"interestIds\":[1, 2], \"groupId\":1}, {\"interestIds\":[3], \"groupId\":2}]",
-		}
+		if exists, _ := aeroDB.Exists(nil, key); exists {
+			userProfileData := &userProfileStruct{}
+			aeroDB.GetObject(nil, key, userProfileData)
 
-		err := client.PutObject(nil, key, testObjToInsert)
-		if err != nil {
-			log.Fatal("AEROSPIKE | WRITING OBJECT FAILED: ", err)
-		}
-
-		userProfileData := &userProfileStruct{}
-		err = client.GetObject(nil, key, userProfileData)
-		if err != nil {
-			log.Fatal("AEROSPIKE | READING OBJECT FAILED: ", err)
+			c.JSON(200, gin.H{
+				"status": "ok",
+				"data":   userProfileData,
+			})
 		}
 
 		c.JSON(200, gin.H{
 			"status": "ok",
-			"data":   userProfileData,
+			"data":   nil,
 		})
 	})
 
-	r.GET("/test", func(c *gin.Context) {
-		type TestStruct struct {
-			mykey int `as:"my_key"` // alias the field to a
-		}
-
-		key, _ := aero.NewKey("mobucks", "userProfiles", "test")
-
-		err := client.PutObject(nil, key, TestStruct{mykey: 15})
-		if err != nil {
-			log.Fatal("AEROSPIKE | WRITING OBJECT FAILED: ", err)
-		}
-
-		rObj := &TestStruct{}
-		err = client.GetObject(nil, key, rObj)
-		if err != nil {
-			log.Fatal("AEROSPIKE | READING OBJECT FAILED: ", err)
-		}
-
-		c.JSON(200, gin.H{
-			"status": "ok",
-			"data":   rObj,
-		})
-	})
-
+	// HTTP SERVER START
 	r.Run(fmt.Sprintf(":%d", cfg.ApplicationPort)) // listen and serve on 0.0.0.0:8080
 }
