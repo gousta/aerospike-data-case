@@ -15,8 +15,9 @@ type configSpecification struct {
 	AerospikePort   int    `envconfig:"AEROSPIKE_PORT" default:"3000"`
 }
 
-type userProfile struct {
-	name string
+type userProfileStruct struct {
+	key     string
+	profile string
 }
 
 func main() {
@@ -30,9 +31,8 @@ func main() {
 	// AEROSPIKE
 	client, err := aero.NewClient(cfg.AerospikeHost, cfg.AerospikePort)
 	if err != nil {
-		log.Fatal("Error connecting to Aerospike Database Server", err)
+		log.Fatal("AEROSPIKE | CONNECTION FAILED", err)
 	}
-	defer client.Close()
 
 	r := gin.Default()
 
@@ -44,22 +44,51 @@ func main() {
 	})
 
 	r.GET("/profile/:id", func(c *gin.Context) {
-		id := c.Param("id")
+		key, _ := aero.NewKey("mobucks", "userProfiles", c.Param("id"))
 
-		key, err := aero.NewKey("mobucks", "userProfiles", id)
-		if err != nil {
-			log.Print(err)
+		testObjToInsert := &userProfileStruct{
+			key:     "test",
+			profile: "JSON[{\"interestIds\":[1, 2], \"groupId\":1}, {\"interestIds\":[3], \"groupId\":2}]",
 		}
 
-		testObj := userProfile{name: "Stratos"}
-		client.PutObject(nil, key, &testObj)
+		err := client.PutObject(nil, key, testObjToInsert)
+		if err != nil {
+			log.Fatal("AEROSPIKE | WRITING OBJECT FAILED: ", err)
+		}
 
-		var userProfileData userProfile
-		client.GetObject(nil, key, &userProfileData)
+		userProfileData := &userProfileStruct{}
+		err = client.GetObject(nil, key, userProfileData)
+		if err != nil {
+			log.Fatal("AEROSPIKE | READING OBJECT FAILED: ", err)
+		}
 
 		c.JSON(200, gin.H{
 			"status": "ok",
 			"data":   userProfileData,
+		})
+	})
+
+	r.GET("/test", func(c *gin.Context) {
+		type TestStruct struct {
+			mykey int `as:"my_key"` // alias the field to a
+		}
+
+		key, _ := aero.NewKey("mobucks", "userProfiles", "test")
+
+		err := client.PutObject(nil, key, TestStruct{mykey: 15})
+		if err != nil {
+			log.Fatal("AEROSPIKE | WRITING OBJECT FAILED: ", err)
+		}
+
+		rObj := &TestStruct{}
+		err = client.GetObject(nil, key, rObj)
+		if err != nil {
+			log.Fatal("AEROSPIKE | READING OBJECT FAILED: ", err)
+		}
+
+		c.JSON(200, gin.H{
+			"status": "ok",
+			"data":   rObj,
 		})
 	})
 
