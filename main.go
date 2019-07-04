@@ -65,12 +65,12 @@ func main() {
 				"status": "ok",
 				"data":   userProfileData,
 			})
+		} else {
+			c.JSON(200, gin.H{
+				"status": "ok",
+				"data":   nil,
+			})
 		}
-
-		c.JSON(200, gin.H{
-			"status": "ok",
-			"data":   nil,
-		})
 	})
 
 	// HTTP SERVER START
